@@ -1,1 +1,447 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Age of War - Graphwar Edition</title>
+    <style>
+        body {
+            background-color: #1a1a1a;
+            color: #ffffff;
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 0;
+            padding: 5px;
+            user-select: none;
+            overflow: hidden;
+        }
+        h2 { margin: 2px 0; font-size: 18px; color: #f1c40f; }
+        #goldDisplay { font-size: 15px; font-weight: bold; color: #f39c12; margin-bottom: 2px; }
+        
+        #queueContainer {
+            margin: 2px auto 6px auto; max-width: 400px; background: #34495e; padding: 4px; border-radius: 6px; font-size: 11px;
+        }
+        #queueSlots { font-weight: bold; color: #ecf0f1; margin-bottom: 2px; }
+        #queueBarContainer { width: 100%; height: 5px; background-color: #2c3e50; border-radius: 3px; overflow: hidden; }
+        #queueProgressBar { width: 0%; height: 100%; background-color: #2ecc71; }
 
+        .game-container { position: relative; display: inline-block; }
+        canvas {
+            background: #2e3d52; display: block; margin: 0 auto; border: 3px solid #4a6572; border-radius: 8px; max-width: 100%;
+        }
+
+        .overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(26, 26, 26, 0.9);
+            display: flex; flex-direction: column; justify-content: center; align-items: center; border-radius: 8px; z-index: 10;
+        }
+        .overlay h1 { color: #f1c40f; margin-bottom: 10px; font-size: 22px; }
+        .overlay p { font-size: 13px; margin-bottom: 15px; color: #bdc3c7; }
+
+        .controls { margin-top: 5px; display: flex; justify-content: center; flex-wrap: wrap; gap: 4px; }
+        button {
+            padding: 8px 10px; font-size: 11px; font-weight: bold; background-color: #f9aa33; color: #232f34; border: none; border-radius: 10px; box-shadow: 0 3px #d78510;
+        }
+        button:active { box-shadow: 0 1px #d78510; transform: translateY(2px); }
+        button:disabled { background-color: #7f8c8d; box-shadow: 0 3px #595959; color: #d5dbdb; }
+        
+        .vip-btn { background-color: #e67e22; color: white; box-shadow: 0 3px #d35400; }
+        .thayghien-btn { background-color: #9b59b6; color: white; box-shadow: 0 3px #8e44ad; }
+        
+        /* Khu vực nhập hàm đồ thị toán học */
+        .graph-box {
+            background: #2c3e50; padding: 6px; border-radius: 10px; display: flex; align-items: center; gap: 5px; margin-top: 4px; justify-content: center;
+        }
+        .graph-box input {
+            padding: 6px; font-size: 12px; border-radius: 6px; border: none; width: 140px; text-align: center; font-weight: bold;
+        }
+        .graph-btn { background-color: #e74c3c; color: white; box-shadow: 0 3px #962d22; }
+    </style>
+</head>
+<body>
+
+    <h2>KỶ NGUYÊN CHIẾN TRANH</h2>
+    <div id="goldDisplay">Tài sản: 50$</div>
+    
+    <div id="queueContainer">
+        <div id="queueSlots">Hàng chờ: [ ] [ ] [ ] [ ]</div>
+        <div id="queueBarContainer"><div id="queueProgressBar"></div></div>
+    </div>
+    
+    <div class="game-container">
+        <div id="startScreen" class="overlay">
+            <h1>AGE OF WAR (MATH)</h1>
+            <p>Kéo vuốt nền đất để xem bản đồ. Nhập hàm số để bắn Graph!</p>
+            <button onclick="startGame()" style="font-size: 16px; padding: 10px 25px;">BẮT ĐẦU PLAY</button>
+        </div>
+
+        <div id="gameOverScreen" class="overlay" style="display: none;">
+            <h1 id="endResultText">CHIẾN THẮNG</h1>
+            <button onclick="restartGame()" style="font-size: 14px; padding: 8px 20px;">CHƠI LẠI (RESTART)</button>
+        </div>
+
+        <canvas id="gameCanvas" width="400" height="200"></canvas>
+    </div>
+    
+    <div class="controls">
+        <button id="btn-warrior" onclick="buyUnit('warrior')">Binh (10$)</button>
+        <button id="btn-archer" onclick="buyUnit('archer')">Cung (15$)</button>
+        <button id="btn-thayghien" class="thayghien-btn" onclick="buyUnit('thayghien')">thay ghiện (35$)</button>
+        <button id="btn-duybeo" class="vip-btn" onclick="buyUnit('duybeo')">duybeo (50$)</button>
+    </div>
+
+    <div class="graph-box">
+        <span style="font-size:12px; font-weight:bold; color:#f1c40f;">f(x) =</span>
+        <input type="text" id="graphInput" value="40*sin(x/25)" placeholder="Ví dụ: 30*sin(x/20)">
+        <button id="btn-graph" class="graph-btn" onclick="fireGraphSkill()">BẮN GRAPH (10s)</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+
+        const worldWidth = 800; 
+        let cameraX = 0; 
+        let gameState = 'menu'; 
+        let gold = 50;
+        let playerBaseHp = 500; let enemyBaseHp = 500; const maxBaseHp = 500;
+        
+        let myArmy = []; let enemyArmy = [];
+        let playerShells = []; let enemyShells = []; // Đạn pháo vật lý 2 bên
+        let archerArrows = []; // Tên của lính cung bắn ra
+        let spawnTimer = 0;
+
+        // Cấu hình lính (Tốc độ đi đã GIẢM 50%)
+        const unitConfigs = {
+            warrior: { price: 10, hp: 100, maxHp: 100, speed: 0.5, damage: 15, color: "#3498db", size: 15, height: 35, trainTime: 90, range: 20 },
+            archer: { price: 15, hp: 60, maxHp: 60, speed: 0.4, damage: 8, color: "#2ecc71", size: 12, height: 30, trainTime: 120, range: 90 }, // Tầm xa 90px
+            thayghien: { price: 35, hp: 140, maxHp: 140, speed: 0.35, damage: 10, color: "#9b59b6", size: 16, height: 42, trainTime: 180, range: 20 },
+            duybeo: { price: 50, hp: 350, maxHp: 350, speed: 0.25, damage: 35, color: "#e67e22", size: 28, height: 60, trainTime: 300, range: 25 }
+        };
+
+        let spawnQueue = []; let currentTrainTimer = 0;
+
+        // Các biến điều khiển Siêu đạn Graph
+        let graphProjectile = null;
+        let graphCooldown = 0;
+
+        // Cooldown bắn pháo của 2 Thành lũy
+        let playerTurretCooldown = 0;
+        let enemyTurretCooldown = 0;
+
+        // --- HỆ THỐNG VUỐT CAMERA ---
+        let isDragging = false; let startX = 0;
+        canvas.addEventListener('touchstart', (e) => { isDragging = true; startX = e.touches[0].clientX; });
+        canvas.addEventListener('touchmove', (e) => {
+            if (!isDragging || gameState !== 'playing') return;
+            let currentX = e.touches[0].clientX;
+            cameraX -= (currentX - startX) * 1.4;
+            if (cameraX < 0) cameraX = 0;
+            if (cameraX > worldWidth - canvas.width) cameraX = worldWidth - canvas.width;
+            startX = currentX;
+        });
+        canvas.addEventListener('touchend', () => { isDragging = false; });
+
+        function startGame() { document.getElementById("startScreen").style.display = "none"; gameState = 'playing'; }
+        function restartGame() {
+            gold = 50; playerBaseHp = 500; enemyBaseHp = 500; myArmy = []; enemyArmy = []; playerShells = []; enemyShells = []; archerArrows = []; spawnQueue = []; graphProjectile = null;
+            spawnTimer = 0; cameraX = 0; currentTrainTimer = 0; graphCooldown = 0; playerTurretCooldown = 0; enemyTurretCooldown = 0;
+            document.getElementById("gameOverScreen").style.display = "none";
+            updateGoldDisplay(); gameState = 'playing';
+        }
+        function triggerGameOver(result) {
+            gameState = 'gameover';
+            document.getElementById("gameOverScreen").style.display = "flex";
+            document.getElementById("endResultText").innerText = result === 'win' ? "CHIẾN THẮNG 🎉" : "THẤT BẠI ☠️";
+            document.getElementById("endResultText").style.color = result === 'win' ? "#2ecc71" : "#e74c3c";
+        }
+
+        function buyUnit(type) {
+            if (gameState !== 'playing') return;
+            if (gold >= unitConfigs[type].price && spawnQueue.length < 4) {
+                gold -= unitConfigs[type].price; spawnQueue.push(type);
+                if (spawnQueue.length === 1) currentTrainTimer = unitConfigs[type].trainTime;
+                updateGoldDisplay();
+            }
+        }
+
+        function spawnEnemy() {
+            if (Math.random() > 0.35) {
+                enemyArmy.push({ x: 740, hp: 90, maxHp: 90, speed: -0.5, damage: 12, color: "#e74c3c", size: 15, height: 35, type: 'normal', range: 20, attackTimer: 0 });
+            } else {
+                enemyArmy.push({ x: 740, hp: 220, maxHp: 220, speed: -0.3, damage: 28, color: "#c0392b", size: 22, height: 50, type: 'giant', range: 25, attackTimer: 0 });
+            }
+        }
+
+        // --- KÍCH HOẠT SIÊU ĐẠN GRAPHWAR ---
+        function fireGraphSkill() {
+            if (graphCooldown > 0 || gameState !== 'playing') return;
+            let rawFormula = document.getElementById("graphInput").value.toLowerCase();
+            
+            // Chuyển đổi chuỗi chữ thành hàm toán học an toàn trong JS
+            let safeFormula = rawFormula.replace(/sin/g, 'Math.sin').replace(/cos/g, 'Math.cos').replace(/tan/g, 'Math.tan').replace(/pi/g, 'Math.PI');
+            try {
+                let mathFunc = new Function('x', `return ${safeFormula};`);
+                // Khởi tạo viên đạn xuất phát từ đỉnh thành ta (x=60, y=100)
+                graphProjectile = { startX: 60, startY: 100, currentX: 60, func: mathFunc };
+                graphCooldown = 600; // Hồi chiêu 10 giây
+                updateGoldDisplay();
+            } catch(e) {
+                alert("Công thức Toán không hợp lệ! Hãy thử lại (Ví dụ: 40*sin(x/25))");
+            }
+        }
+
+        function updateGoldDisplay() {
+            document.getElementById("goldDisplay").innerText = "Tài sản: " + Math.floor(gold) + "$";
+            let queueFull = spawnQueue.length >= 4;
+            document.getElementById("btn-warrior").disabled = gold < 10 || queueFull;
+            document.getElementById("btn-archer").disabled = gold < 15 || queueFull;
+            document.getElementById("btn-thayghien").disabled = gold < 35 || queueFull;
+            document.getElementById("btn-duybeo").disabled = gold < 50 || queueFull;
+            
+            let gBtn = document.getElementById("btn-graph");
+            if(graphCooldown > 0) {
+                gBtn.disabled = true; gBtn.innerText = `Hồi chiêu (${Math.ceil(graphCooldown/60)}s)`;
+            } else {
+                gBtn.disabled = false; gBtn.innerText = "BẮT ĐẦU BẮN GRAPH";
+            }
+
+            let slotsText = "Hàng chờ: ";
+            for (let i = 0; i < 4; i++) {
+                if (i < spawnQueue.length) {
+                    let n = spawnQueue[i] === 'warrior'?'Binh':(spawnQueue[i]==='archer'?'Cung':(spawnQueue[i]==='thayghien'?'Nghiện':'DuyBéo'));
+                    slotsText += `[${n}] `;
+                } else slotsText += "[ ] ";
+            }
+            document.getElementById("queueSlots").innerText = slotsText;
+        }
+
+        // --- VÒNG LẶP XỬ LÝ CHÍNH ---
+        function gameLoop() {
+            if (gameState === 'playing') {
+                spawnTimer++;
+                // Giảm tốc độ tăng tiền (+2$ mỗi 80 frames)
+                if (spawnTimer % 80 === 0) { gold += 2; updateGoldDisplay(); }
+                if (spawnTimer % 200 === 0) spawnEnemy();
+
+                if (graphCooldown > 0) { graphCooldown--; if(graphCooldown === 0) updateGoldDisplay(); }
+
+                // Xử lý hàng chờ huấn luyện lính phe ta
+                if (spawnQueue.length > 0) {
+                    currentTrainTimer--;
+                    let maxTime = unitConfigs[spawnQueue[0]].trainTime;
+                    document.getElementById("queueProgressBar").style.width = ((maxTime - currentTrainTimer) / maxTime) * 100 + "%";
+
+                    if (currentTrainTimer <= 0) {
+                        let type = spawnQueue.shift(); let conf = unitConfigs[type];
+                        let newUnit = { x: 60, hp: conf.hp, maxHp: conf.maxHp, speed: conf.speed, damage: conf.damage, color: conf.color, size: conf.size, height: conf.height, type: type, range: conf.range, attackTimer: 0 };
+                        if (type === 'thayghien') newUnit.abilityTimer = 0;
+                        myArmy.push(newUnit);
+                        updateGoldDisplay();
+                        if (spawnQueue.length > 0) currentTrainTimer = unitConfigs[spawnQueue[0]].trainTime;
+                    }
+                } else document.getElementById("queueProgressBar").style.width = "0%";
+
+                // --- XỬ LÝ SIÊU ĐẠN GRAPH (Hàm toán học uốn lượn) ---
+                if (graphProjectile) {
+                    graphProjectile.currentX += 3.5; // Đạn tịnh tiến dần qua phải
+                    let rx = graphProjectile.currentX - graphProjectile.startX;
+                    try {
+                        // Tính toán độ cao Y dựa theo hàm số người dùng nhập vào
+                        graphProjectile.currentY = graphProjectile.startY - graphProjectile.func(rx);
+                    } catch(e) { graphProjectile = null; }
+
+                    if (graphProjectile) {
+                        // Kiểm tra va chạm: Nếu đạn chạm trúng lính địch bất kỳ -> ONE SHOT tiêu diệt luôn
+                        let hitEnemy = enemyArmy.find(e => Math.abs(e.x - graphProjectile.currentX) < 20 && graphProjectile.currentY >= (160 - e.height) && graphProjectile.currentY <= 160);
+                        if (hitEnemy) {
+                            hitEnemy.hp = -999; // Bốc hơi ngay lập tức!
+                            graphProjectile = null;
+                        } else if (graphProjectile.currentX > worldWidth || graphProjectile.currentY > 160 || graphProjectile.currentY < -50) {
+                            graphProjectile = null; // Bay ra khỏi map hoặc cắm đất thì mất
+                        }
+                    }
+                }
+
+                // --- PHÁO VẬT LÝ THÀNH TA (Cố định góc - Có thể Trượt) ---
+                if (playerTurretCooldown > 0) playerTurretCooldown--;
+                if (playerTurretCooldown === 0 && enemyArmy.some(e => e.x < 350)) {
+                    // Kích hoạt bắn với Vectơ lực cố định bay cao vòng cung rơi xuống tầm x=220px -> x=270px
+                    playerShells.push({ x: 60, y: 70, vx: 2.8, vy: -3.8, gravity: 0.1 });
+                    playerTurretCooldown = 150; // 2.5 giây hồi pháo
+                }
+                playerShells.forEach(shell => {
+                    shell.x += shell.vx; shell.vy += shell.gravity; shell.y += shell.vy;
+                    let hit = enemyArmy.find(e => Math.abs(e.x - shell.x) < 15 && shell.y >= (160-e.height) && shell.y <= 160);
+                    if (hit) {
+                        enemyArmy.forEach(e => { if(Math.abs(e.x - shell.x) < 45) e.hp -= 40; }); // Trúng địch -> Nổ lan
+                        shell.deleteMe = true;
+                    } else if (shell.y >= 160) { shell.deleteMe = true; } // Rớt xuống đất hụt -> Biến mất không nổ lan
+                });
+                playerShells = playerShells.filter(s => !s.deleteMe);
+
+                // --- PHÁO VẬT LÝ THÀNH ĐỊCH (Bắn trả phe ta) ---
+                if (enemyTurretCooldown > 0) enemyTurretCooldown--;
+                if (enemyTurretCooldown === 0 && myArmy.some(u => u.x > 450)) {
+                    // Bắn ngược về bên trái, tầm rơi cố định gần căn cứ địch bảo vệ thành
+                    enemyShells.push({ x: 740, y: 70, vx: -2.8, vy: -3.8, gravity: 0.1 });
+                    enemyTurretCooldown = 160;
+                }
+                enemyShells.forEach(shell => {
+                    shell.x += shell.vx; shell.vy += shell.gravity; shell.y += shell.vy;
+                    let hit = myArmy.find(u => Math.abs(u.x - shell.x) < 15 && shell.y >= (160-u.height) && shell.y <= 160);
+                    if (hit) {
+                        myArmy.forEach(u => { if(Math.abs(u.x - shell.x) < 45) u.hp -= 35; }); // Trúng quân ta -> Nổ lan
+                        shell.deleteMe = true;
+                    } else if (shell.y >= 160) { shell.deleteMe = true; } // Hụt xuống đất -> Biến mất
+                });
+                enemyShells = enemyShells.filter(s => !s.deleteMe);
+
+                // --- XỬ LÝ ĐẠN BẮN CỦA LÍNH CUNG ---
+                archerArrows.forEach(arrow => {
+                    arrow.x += arrow.speed;
+                    if (Math.abs(arrow.x - arrow.targetUnit.x) < 10 && arrow.targetUnit.hp > 0) {
+                        arrow.targetUnit.hp -= arrow.damage; // Trúng gây sát thương nhỏ
+                        arrow.deleteMe = true;
+                    }
+                });
+                archerArrows = archerArrows.filter(a => !a.deleteMe && a.targetUnit.hp > 0);
+
+                let babyWarriors = [];
+
+                // --- XỬ LÝ LÍNH TA ĐÁNH NHAU (Chậm rãi, từng cú) ---
+                myArmy.forEach((unit) => {
+                    if (unit.attackTimer > 0) unit.attackTimer--;
+
+                    // Tìm kẻ địch đứng trước mặt gần nhất
+                    let enemiesInRange = enemyArmy.filter(e => e.x > unit.x && (e.x - unit.x) <= unit.range);
+                    let hitEnemyBase = (unit.x >= 740);
+
+                    if (enemiesInRange.length === 0 && !hitEnemyBase) {
+                        unit.x += unit.speed; // Không có ai thì tiếp tục hành quân đi tiếp
+                    } else {
+                        // NẾU LÀ CUNG THỦ: Đứng yên từ xa bắn mũi tên
+                        if (unit.type === 'archer') {
+                            if (unit.attackTimer === 0 && enemiesInRange.length > 0) {
+                                archerArrows.push({ x: unit.x + 10, y: 160 - unit.height + 5, targetUnit: enemiesInRange[0], speed: 3, damage: unit.damage });
+                                unit.attackTimer = 70; // 1.1 giây bắn 1 mũi tên
+                            }
+                        } else {
+                            // CÁC LÍNH CẬN CHIẾN: Chém chém từng cú một
+                            if (unit.attackTimer === 0 && enemiesInRange.length > 0) {
+                                enemiesInRange[0].hp -= unit.damage;
+                                unit.attackTimer = 60; // Nghỉ hồi sức 1 giây mới chém tiếp phát thứ hai
+                            }
+                        }
+                    }
+
+                    if (hitEnemyBase && unit.attackTimer === 0) {
+                        enemyBaseHp -= unit.damage; unit.attackTimer = 60;
+                        if (enemyBaseHp <= 0) triggerGameOver('win');
+                    }
+
+                    // Nội tại của Thầy Nghiện
+                    if (unit.type === 'thayghien') {
+                        unit.abilityTimer++;
+                        if (unit.abilityTimer >= 360) {
+                            unit.abilityTimer = 0;
+                            babyWarriors.push({ x: unit.x + 8, hp: 100, maxHp: 100, speed: 0.5, damage: 15, color: "#3498db", size: 15, height: 35, type: 'warrior', range: 20, attackTimer: 0 });
+                        }
+                    }
+                });
+                if(babyWarriors.length > 0) myArmy = myArmy.concat(babyWarriors);
+
+                // --- XỬ LÝ LÍNH ĐỊCH ĐÁNH NHAU ---
+                enemyArmy.forEach((enemy) => {
+                    if (enemy.attackTimer > 0) enemy.attackTimer--;
+
+                    let playersInRange = myArmy.filter(u => u.x < enemy.x && (enemy.x - u.x) <= enemy.range);
+                    let hitPlayerBase = (enemy.x <= 60);
+
+                    if (playersInRange.length === 0 && !hitPlayerBase) {
+                        enemy.x += enemy.speed; // Đi tiếp qua trái
+                    } else {
+                        if (enemy.attackTimer === 0 && playersInRange.length > 0) {
+                            playersInRange[0].hp -= enemy.damage;
+                            enemy.attackTimer = 60; // Đánh chậm lại từng cú
+                        }
+                    }
+
+                    if (hitPlayerBase && enemy.attackTimer === 0) {
+                        playerBaseHp -= enemy.damage; enemy.attackTimer = 60;
+                        if (playerBaseHp <= 0) triggerGameOver('lose');
+                    }
+                });
+
+                // Cộng vàng khi diệt địch
+                let deadCount = enemyArmy.filter(e => e.hp <= 0).length;
+                if (deadCount > 0) { gold += deadCount * 15; updateGoldDisplay(); }
+
+                myArmy = myArmy.filter(u => u.hp > 0);
+                enemyArmy = enemyArmy.filter(e => e.hp > 0);
+            }
+
+            // --- VẼ ĐỒ HỌA RA CANVAS ---
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.save();
+            ctx.translate(-cameraX, 0); 
+
+            // Nền cỏ hành quân
+            ctx.fillStyle = "#1e272e"; ctx.fillRect(0, 160, worldWidth, 40);
+
+            // Hai Thành Lũy 2 bên chiến tuyến xa nhau
+            ctx.fillStyle = "#7f8c8d"; ctx.fillRect(0, 50, 60, 110); 
+            ctx.fillStyle = "#95a5a6"; ctx.fillRect(740, 50, 60, 110); 
+
+            // Tháp pháo 2 bên thành
+            ctx.fillStyle = "#34495e"; ctx.fillRect(40, 70, 20, 15); // Tháp ta
+            ctx.fillStyle = "#2c3e50"; ctx.fillRect(740, 70, 20, 15); // Tháp địch
+
+            // Thanh máu của 2 Thành chính lớn
+            ctx.fillStyle = "red"; ctx.fillRect(10, 30, 100, 6);
+            ctx.fillStyle = "green"; ctx.fillRect(10, 30, (playerBaseHp / maxBaseHp) * 100, 6);
+            ctx.fillStyle = "red"; ctx.fillRect(690, 30, 100, 6);
+            ctx.fillStyle = "green"; ctx.fillRect(690, 30, (enemyBaseHp / maxBaseHp) * 100, 6);
+
+            // Vẽ Quân Ta
+            myArmy.forEach((unit) => {
+                ctx.fillStyle = "red"; ctx.fillRect(unit.x - 2, 150 - unit.height, 20, 3);
+                ctx.fillStyle = "green"; ctx.fillRect(unit.x - 2, 150 - unit.height, (unit.hp / unit.maxHp) * 20, 3);
+                ctx.fillStyle = unit.color; ctx.fillRect(unit.x, 160 - unit.height, unit.size, unit.height);
+                if(unit.type === 'thayghien') { ctx.fillStyle = "rgba(155, 89, 182, 0.4)"; ctx.fillRect(unit.x - 3, 157, unit.size + 6, 3); }
+            });
+
+            // Vẽ Quân Địch
+            enemyArmy.forEach((enemy) => {
+                ctx.fillStyle = "red"; ctx.fillRect(enemy.x - 2, 150 - enemy.height, 20, 3);
+                ctx.fillStyle = "green"; ctx.fillRect(enemy.x - 2, 150 - enemy.height, (enemy.hp / enemy.maxHp) * 20, 3);
+                ctx.fillStyle = enemy.color; ctx.fillRect(enemy.x, 160 - enemy.height, enemy.size, enemy.height);
+            });
+
+            // Vẽ đạn pháo thường (Hình tròn nhỏ màu vàng)
+            ctx.fillStyle = "#f1c40f";
+            playerShells.concat(enemyShells).forEach(shell => {
+                ctx.beginPath(); ctx.arc(shell.x, shell.y, 4, 0, Math.PI*2); ctx.fill();
+            });
+
+            // Vẽ các mũi tên nhỏ của Lính Cung đang bay
+            ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 1.5;
+            archerArrows.forEach(arrow => {
+                ctx.beginPath(); ctx.moveTo(arrow.x, arrow.y); ctx.lineTo(arrow.x + 6, arrow.y); ctx.stroke();
+            });
+
+            // Vẽ Siêu Đạn Đạo GRAPH SKILL (Đốm lửa đỏ rực rỡ uốn lượn)
+            if (graphProjectile) {
+                ctx.fillStyle = "#e74c3c"; ctx.beginPath(); ctx.arc(graphProjectile.currentX, graphProjectile.currentY, 6, 0, Math.PI*2); ctx.fill();
+                // Vẽ đuôi lửa nhỏ phía sau đạn
+                ctx.fillStyle = "#f39c12"; ctx.beginPath(); ctx.arc(graphProjectile.currentX - 5, graphProjectile.currentY, 4, 0, Math.PI*2); ctx.fill();
+            }
+
+            ctx.restore(); 
+            requestAnimationFrame(gameLoop);
+        }
+
+        updateGoldDisplay();
+        gameLoop();
+    </script>
+</body>
+</html>
