@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Age of War - Siêu Pháo Vật Lý</title>
+    <style>
+        body {
+            background-color: #1a1a1a; color: #ffffff; font-family: Arial, sans-serif;
+            text-align: center; margin: 0; padding: 5px; user-select: none; overflow: hidden;
+            position: relative; /* Để đặt nút tuyệt đối theo body */
+        }
+        h2 { margin: 2px 0; font-size: 18px; color: #f1c40f; }
+        #goldDisplay { font-size: 15px; font-weight: bold; color: #f39c12; margin-bottom: 2px; }
+        
+        #queueContainer {
+            margin: 2px auto 6px auto; max-width: 400px; background: #34495e; padding: 4px; border-radius: 6px; font-size: 11px;
+        }
+        #queueSlots { font-weight: bold; color: #ecf0f1; margin-bottom: 2px; }
+        #queueBarContainer { width: 100%; height: 5px; background-color: #2c3e50; border-radius: 3px; overflow: hidden; }
+        #queueProgressBar { width: 0%; height: 100%; background-color: #2ecc71; }
+
+        .game-container { position: relative; display: inline-block; }
+        canvas {
+            background: #2e3d52; display: block; margin: 0 auto; border: 3px solid #4a6572; border-radius: 8px; max-width: 100%;
+        }
+
+        .overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(26, 26, 26, 0.9);
+            display: flex; flex-direction: column; justify-content: center; align-items: center; border-radius: 8px; z-index: 10;
+        }
+        .overlay h1 { color: #f1c40f; margin-bottom: 10px; font-size: 22px; }
+
+        .controls { margin-top: 5px; display: flex; justify-content: center; flex-wrap: wrap; gap: 4px; }
+        button {
+            padding: 8px 10px; font-size: 11px; font-weight: bold; background-color: #f9aa33; color: #232f34; border: none; border-radius: 10px; box-shadow: 0 3px #d78510; cursor: pointer;
+        }
+        button:active { box-shadow: 0 1px #d78510; transform: translateY(2px); }
+        button:disabled { background-color: #7f8c8d; box-shadow: 0 3px #595959; color: #d5dbdb; }
+        
+        .vip-btn { background-color: #e67e22; color: white; box-shadow: 0 3px #d35400; }
+        .thayghien-btn { background-color: #9b59b6; color: white; box-shadow: 0 3px #8e44ad; }
+        
+        /* Bảng điều khiển Pháo thủ công */
+        .panel-container {
+            background: #2c3e50; padding: 6px; border-radius: 10px; margin-top: 4px; 
+            display: flex; flex-direction: column; gap: 4px; align-items: center; justify-content: center;
+        }
+        .panel-row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; font-size: 11px; font-weight: bold;}
+        .panel-row label { display: flex; align-items: center; gap: 3px; color: #ecf0f1; }
+        .panel-row input { padding: 3px; font-size: 11px; border-radius: 4px; border: none; width: 45px; text-align: center; }
+        
+        .graph-section { border-top: 1px solid #34495e; padding-top: 4px; width: 100%; display: flex; justify-content: center; gap: 5px; align-items: center;}
+        .graph-section input { width: 130px; padding: 4px; font-size: 11px; border-radius: 4px; border: none; text-align: center; font-weight: bold;}
+
+        /* Nút Bật/Tắt Lưới Tọa Độ ở góc trên */
+        #gridToggleBtn {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            background-color: #3498db;
+            color: white;
+            box-shadow: 0 3px #2980b9;
+            z-index: 100;
+        }
+        #gridToggleBtn.active {
+            background-color: #e74c3c;
+            box-shadow: 0 3px #c0392b;
+        }
+    </style>
+</head>
+<body>
+
+    <button id="gridToggleBtn" onclick="toggleGrid()">Mở Lưới Trục</button>
+
+    <h2>KỶ NGUYÊN CHIẾN TRANH</h2>
+    <div id="goldDisplay">Tài sản: 50$</div>
+    
+    <div id="queueContainer">
+        <div id="queueSlots">Hàng chờ: [ ] [ ] [ ] [ ]</div>
+        <div id="queueBarContainer"><div id="queueProgressBar"></div></div>
+    </div>
+    
+    <div class="game-container">
+        <div id="startScreen" class="overlay">
+            <h1>AGE OF WAR (PHYSICS)</h1>
+            <p>Click Tháp Pháo để căn chỉnh thủ công. Mở lưới tọa độ góc trên để ngắm!</p>
+            <button onclick="startGame()" style="font-size: 16px; padding: 10px 25px;">BẮT ĐẦU PLAY</button>
+        </div>
+
+        <div id="gameOverScreen" class="overlay" style="display: none;">
+            <h1 id="endResultText">CHIẾN THẮNG</h1>
+            <button onclick="restartGame()" style="font-size: 14px; padding: 8px 20px;">CHƠI LẠI (RESTART)</button>
+        </div>
+
+        <canvas id="gameCanvas" width="400" height="200"></canvas>
+    </div>
+    
+    <div class="controls">
+        <button id="btn-warrior" onclick="buyUnit('warrior')">Binh (10$)</button>
+        <button id="btn-archer" onclick="buyUnit('archer')">Cung (15$)</button>
+        <button id="btn-thayghien" class="thayghien-btn" onclick="buyUnit('thayghien')">thay ghiện (35$)</button>
+        <button id="btn-duybeo" class="vip-btn" onclick="buyUnit('duybeo')">duybeo (50$)</button>
+    </div>
+
+    <div class="panel-container">
+        <div class="panel-row">
+            <span style="color: #f1c40f;">PHÁO THỦ CÔNG:</span>
+            <label>Góc(°): <input type="number" id="turretAngle" value="45" min="0" max="90"></label>
+            <label>Lực: <input type="number" id="turretForce" value="5" min="1" max="15" step="0.5"></label>
+            <label>Nặng(kg): <input type="number" id="turretMass" value="1" min="0.5" max="4" step="0.1"></label>
+            <label>Ma sát: <input type="number" id="turretFric" value="0.01" min="0" max="0.05" step="0.005"></label>
+            <button style="background:#2ecc71; color:white; padding:3px 8px; box-shadow:0 2px #27ae60;" onclick="fireManualTurret()">BẮN PHÁO</button>
+        </div>
+        
+        <div class="graph-section">
+            <span style="font-size:11px; font-weight:bold; color:#e74c3c;">GRAPH SKILL: f(x) =</span>
+            <input type="text" id="graphInput" value="35*sin(x/20)" placeholder="Ví dụ: 30*sin(x/25)">
+            <button id="btn-graph" style="background-color: #e74c3c; color: white; box-shadow: 0 2px #962d22; padding:4px 8px;" onclick="fireGraphSkill()">BẮN GRAPH (10s)</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+
+        const worldWidth = 800; 
+        let cameraX = 0; 
+        let gameState = 'menu'; 
+        let gold = 50;
+        let playerBaseHp = 500; let enemyBaseHp = 500; const maxBaseHp = 500;
+        
+        let myArmy = []; let enemyArmy = [];
+        let playerShells = []; let enemyShells = []; 
+        let archerArrows = []; 
+        let spawnTimer = 0;
+
+        let showGrid = false; // Biến trạng thái Bật/Tắt Lưới Tọa Độ
+
+        const unitConfigs = {
+            warrior: { price: 10, hp: 100, maxHp: 100, speed: 0.5, damage: 15, color: "#3498db", size: 15, height: 35, trainTime: 90, range: 20 },
+            archer: { price: 15, hp: 60, maxHp: 60, speed: 0.4, damage: 8, color: "#2ecc71", size: 12, height: 30, trainTime: 120, range: 90 }, 
+            thayghien: { price: 35, hp: 140, maxHp: 140, speed: 0.35, damage: 10, color: "#9b59b6", size: 16, height: 42, trainTime: 180, range: 20 },
+            duybeo: { price: 50, hp: 350, maxHp: 350, speed: 0.25, damage: 35, color: "#e67e22", size: 28, height: 60, trainTime: 300, range: 25 }
+        };
+
+        let spawnQueue = []; let currentTrainTimer = 0;
+
+        let graphProjectile = null;
+        let graphCooldown = 0;
+
+        let playerTurretCooldown = 0;
+        let enemyTurretCooldown = 0;
+        const turretMaxRange = 220; 
+
+        let isDragging = false; let startX = 0; let totalMove = 0;
+
+        canvas.addEventListener('touchstart', (e) => { 
+            isDragging = true; 
+            startX = e.touches[0].clientX; 
+            totalMove = 0;
+        });
+        
+        canvas.addEventListener('touchmove', (e) => {
+            if (!isDragging || gameState !== 'playing') return;
+            let currentX = e.touches[0].clientX;
+            let diff = currentX - startX;
+            cameraX -= diff * 1.4;
+            totalMove += Math.abs(diff);
+            if (cameraX < 0) cameraX = 0;
+            if (cameraX > worldWidth - canvas.width) cameraX = worldWidth - canvas.width;
+            startX = currentX;
+        });
+
+        canvas.addEventListener('touchend', (e) => { 
+            isDragging = false; 
+            if (totalMove < 5 && gameState === 'playing') {
+                let rect = canvas.getBoundingClientRect();
+                let touchX = (e.changedTouches[0].clientX - rect.left) * (canvas.width / rect.width) + cameraX;
+                let touchY = (e.changedTouches[0].clientY - rect.top) * (canvas.height / rect.height);
+                
+                if (touchX >= 35 && touchX <= 65 && touchY >= 60 && touchY <= 85) {
+                    navigator.vibrate ? navigator.vibrate(30) : null;
+                    alert("Chế độ Thủ Công sẵn sàng! Hãy điều chỉnh các thông số Góc, Lực ở bảng điều khiển bên dưới và ấn BẮN PHÁO.");
+                }
+            }
+        });
+
+        canvas.addEventListener('click', (e) => {
+            if (gameState !== 'playing') return;
+            let rect = canvas.getBoundingClientRect();
+            let clickX = (e.clientX - rect.left) * (canvas.width / rect.width) + cameraX;
+            let clickY = (e.clientY - rect.top) * (canvas.height / rect.height);
+            if (clickX >= 35 && clickX <= 65 && clickY >= 60 && clickY <= 85) {
+                alert("Đã chọn Tháp Pháo! Bạn có thể nhập các thông số vật lý ở bảng bên dưới để khai hỏa thủ công.");
+            }
+        });
+
+        // Hàm Bật/Tắt Lưới Tọa Độ
+        function toggleGrid() {
+            showGrid = !showGrid;
+            let btn = document.getElementById("gridToggleBtn");
+            if (showGrid) {
+                btn.classList.add("active");
+                btn.innerText = "Tắt Lưới Trục";
+            } else {
+                btn.classList.remove("active");
+                btn.innerText = "Mở Lưới Trục";
+            }
+        }
+
+        function startGame() { document.getElementById("startScreen").style.display = "none"; gameState = 'playing'; }
+        function restartGame() {
+            gold = 50; playerBaseHp = 500; enemyBaseHp = 500; myArmy = []; enemyArmy = []; playerShells = []; enemyShells = []; archerArrows = []; spawnQueue = []; graphProjectile = null;
+            spawnTimer = 0; cameraX = 0; currentTrainTimer = 0; graphCooldown = 0; playerTurretCooldown = 0; enemyTurretCooldown = 0;
+            document.getElementById("gameOverScreen").style.display = "none";
+            updateGoldDisplay(); gameState = 'playing';
+        }
+        function triggerGameOver(result) {
+            gameState = 'gameover';
+            document.getElementById("gameOverScreen").style.display = "flex";
+            document.getElementById("endResultText").innerText = result === 'win' ? "CHIẾN THẮNG 🎉" : "THẤT BẠI ☠️";
+            document.getElementById("endResultText").style.color = result === 'win' ? "#2ecc71" : "#e74c3c";
+        }
+
+        function buyUnit(type) {
+            if (gameState !== 'playing') return;
+            if (gold >= unitConfigs[type].price && spawnQueue.length < 4) {
+                gold -= unitConfigs[type].price; spawnQueue.push(type);
+                if (spawnQueue.length === 1) currentTrainTimer = unitConfigs[type].trainTime;
+                updateGoldDisplay();
+            }
+        }
+
+        function spawnEnemy() {
+            if (Math.random() > 0.4) {
+                enemyArmy.push({ id: Math.random(), x: 742, hp: 90, maxHp: 90, speed: -0.5, damage: 12, color: "#e74c3c", size: 15, height: 35, range: 20, attackTimer: 0 });
+            } else {
+                enemyArmy.push({ id: Math.random(), x: 742, hp: 220, maxHp: 220, speed: -0.3, damage: 28, color: "#c0392b", size: 22, height: 50, range: 25, attackTimer: 0 });
+            }
+        }
+
+        function fireManualTurret() {
+            if (gameState !== 'playing' || playerTurretCooldown > 0) return;
+            
+            let angle = Math.max(0, Math.min(90, parseFloat(document.getElementById("turretAngle").value) || 45));
+            let force = Math.max(1, Math.min(15, parseFloat(document.getElementById("turretForce").value) || 5));
+            let mass = Math.max(0.5, Math.min(4, parseFloat(document.getElementById("turretMass").value) || 1));
+            let friction = Math.max(0, Math.min(0.05, parseFloat(document.getElementById("turretFric").value) || 0.01));
+            
+            document.getElementById("turretAngle").value = angle;
+            document.getElementById("turretForce").value = force;
+            document.getElementById("turretMass").value = mass;
+            document.getElementById("turretFric").value = friction;
+
+            let angleRad = angle * Math.PI / 180;
+            let vx = force * Math.cos(angleRad);
+            let vy = -force * Math.sin(angleRad); 
+
+            playerShells.push({ x: 60, y: 70, vx: vx, vy: vy, mass: mass, friction: friction, isManual: true });
+            playerTurretCooldown = 90; 
+        }
+
+        function fireGraphSkill() {
+            if (graphCooldown > 0 || gameState !== 'playing') return;
+            let rawFormula = document.getElementById("graphInput").value.toLowerCase();
+            let safeFormula = rawFormula.replace(/sin/g, 'Math.sin').replace(/cos/g, 'Math.cos').replace(/tan/g, 'Math.tan').replace(/pi/g, 'Math.PI');
+            try {
+                let mathFunc = new Function('x', `return ${safeFormula};`);
+                graphProjectile = { startX: 60, startY: 100, currentX: 60, func: mathFunc, pierceLeft: 5, hitEnemyIds: [] };
+                graphCooldown = 600; 
+                updateGoldDisplay();
+            } catch(e) {
+                alert("Hàm số Toán học chưa đúng cú pháp!");
+            }
+        }
+
+        function updateGoldDisplay() {
+            document.getElementById("goldDisplay").innerText = "Tài sản: " + Math.floor(gold) + "$";
+            let queueFull = spawnQueue.length >= 4;
+            document.getElementById("btn-warrior").disabled = gold < 10 || queueFull;
+            document.getElementById("btn-archer").disabled = gold < 15 || queueFull;
+            document.getElementById("btn-thayghien").disabled = gold < 35 || queueFull;
+            document.getElementById("btn-duybeo").disabled = gold < 50 || queueFull;
+            
+            let gBtn = document.getElementById("btn-graph");
+            if(graphCooldown > 0) {
+                gBtn.disabled = true; gBtn.innerText = `Hồi chiêu (${Math.ceil(graphCooldown/60)}s)`;
+            } else {
+                gBtn.disabled = false; gBtn.innerText = "BẮN GRAPH TỌA ĐỘ";
+            }
+
+            let slotsText = "Hàng chờ: ";
+            for (let i = 0; i < 4; i++) {
+                if (i < spawnQueue.length) {
+                    let n = spawnQueue[i] === 'warrior'?'Binh':(spawnQueue[i]==='archer'?'Cung':(spawnQueue[i]==='thayghien'?'Nghiện':'DuyBéo'));
+                    slotsText += `[${n}] `;
+                } else slotsText += "[ ] ";
+            }
+            document.getElementById("queueSlots").innerText = slotsText;
+        }
+
+        function gameLoop() {
+            if (gameState === 'playing') {
+                spawnTimer++;
+                if (spawnTimer % 85 === 0) { gold += 2; updateGoldDisplay(); }
+                if (spawnTimer % 360 === 0) spawnEnemy();
+
+                if (graphCooldown > 0) { graphCooldown--; if(graphCooldown === 0) updateGoldDisplay(); }
+
+                if (spawnQueue.length > 0) {
+                    currentTrainTimer--;
+                    let maxTime = unitConfigs[spawnQueue[0]].trainTime;
+                    document.getElementById("queueProgressBar").style.width = ((maxTime - currentTrainTimer) / maxTime) * 100 + "%";
+
+                    if (currentTrainTimer <= 0) {
+                        let type = spawnQueue.shift(); let conf = unitConfigs[type];
+                        let newUnit = { 
+                            id: Math.random(), x: 58, hp: conf.hp, maxHp: conf.maxHp, speed: conf.speed, 
+                            damage: conf.damage, color: conf.color, size: conf.size, height: conf.height, 
+                            type: type, range: conf.range, attackTimer: 0 
+                        };
+                        if (type === 'thayghien') newUnit.abilityTimer = 0;
+                        myArmy.push(newUnit);
+                        updateGoldDisplay();
+                        if (spawnQueue.length > 0) currentTrainTimer = unitConfigs[spawnQueue[0]].trainTime;
+                    }
+                } else document.getElementById("queueProgressBar").style.width = "0%";
+
+                if (graphProjectile) {
+                    graphProjectile.currentX += 4; 
+                    let rx = graphProjectile.currentX - graphProjectile.startX;
+                    try {
+                        graphProjectile.currentY = graphProjectile.startY - graphProjectile.func(rx);
+                    } catch(e) { graphProjectile = null; }
+
+                    if (graphProjectile) {
+                        enemyArmy.forEach(e => {
+                            let isHit = Math.abs(e.x - graphProjectile.currentX) < 22 && 
+                                        graphProjectile.currentY >= (160 - e.height) && 
+                                        graphProjectile.currentY <= 160;
+                            
+                            if (isHit && !graphProjectile.hitEnemyIds.includes(e.id)) {
+                                e.hp -= 250; 
+                                graphProjectile.hitEnemyIds.push(e.id);
+                                graphProjectile.pierceLeft--; 
+                            }
+                        });
+
+                        if (graphProjectile.pierceLeft <= 0 || graphProjectile.currentX > worldWidth || graphProjectile.currentY > 160 || graphProjectile.currentY < -100) {
+                            graphProjectile = null;
+                        }
+                    }
+                }
+
+                if (playerTurretCooldown > 0) playerTurretCooldown--;
+                if (playerTurretCooldown === 0) {
+                    let closestEnemy = null; let minX = 9999;
+                    enemyArmy.forEach(e => { if(e.x < minX) { minX = e.x; closestEnemy = e; } });
+
+                    if (closestEnemy && closestEnemy.x <= turretMaxRange) {
+                        let dist = closestEnemy.x - 60;
+                        let calculatedVx = dist / 55; 
+                        playerShells.push({ x: 60, y: 70, vx: calculatedVx, vy: -3.2, mass: 1, friction: 0.005, isManual: false });
+                        playerTurretCooldown = 130; 
+                    }
+                }
+
+                playerShells.forEach(shell => {
+                    let dragFactor = 1 - (shell.friction / shell.mass);
+                    shell.vx *= dragFactor;
+                    shell.vy = shell.vy * dragFactor + (0.13 * shell.mass); 
+                    
+                    shell.x += shell.vx; 
+                    shell.y += shell.vy;
+
+                    let hit = enemyArmy.find(e => Math.abs(e.x - shell.x) < 18 && shell.y >= (160 - e.height) && shell.y <= 160);
+                    if (hit) {
+                        enemyArmy.forEach(e => { if(Math.abs(e.x - shell.x) < 45) e.hp -= 45; }); 
+                        shell.deleteMe = true;
+                    } else if (shell.y >= 160) { 
+                        shell.deleteMe = true; 
+                    }
+                });
+                playerShells = playerShells.filter(s => !s.deleteMe);
+
+                if (enemyTurretCooldown > 0) enemyTurretCooldown--;
+                if (enemyTurretCooldown === 0) {
+                    let closestPlayer = null; let maxX = -1;
+                    myArmy.forEach(u => { if(u.x > maxX) { maxX = u.x; closestPlayer = u; } });
+
+                    if (closestPlayer && closestPlayer.x >= (worldWidth - turretMaxRange)) {
+                        let dist = 740 - closestPlayer.x;
+                        let calculatedVx = -dist / 55;
+                        enemyShells.push({ x: 740, y: 70, vx: calculatedVx, vy: -3.2, mass: 1, friction: 0.005 });
+                        enemyTurretCooldown = 140;
+                    }
+                }
+
+                enemyShells.forEach(shell => {
+                    let dragFactor = 1 - (shell.friction / shell.mass);
+                    shell.vx *= dragFactor; shell.vy = shell.vy * dragFactor + (0.13 * shell.mass);
+                    shell.x += shell.vx; shell.y += shell.vy;
+
+                    let hit = myArmy.find(u => Math.abs(u.x - shell.x) < 18 && shell.y >= (160 - u.height) && shell.y <= 160);
+                    if (hit) {
+                        myArmy.forEach(u => { if(Math.abs(u.x - shell.x) < 45) u.hp -= 35; });
+                        shell.deleteMe = true;
+                    } else if (shell.y >= 160) { shell.deleteMe = true; }
+                });
+                enemyShells = enemyShells.filter(s => !s.deleteMe);
+
+                archerArrows.forEach(arrow => {
+                    arrow.x += arrow.speed;
+                    if (Math.abs(arrow.x - arrow.targetUnit.x) < 10 && arrow.targetUnit.hp > 0) {
+                        arrow.targetUnit.hp -= arrow.damage; arrow.deleteMe = true;
+                    }
+                });
+                archerArrows = archerArrows.filter(a => !a.deleteMe && a.targetUnit.hp > 0);
+
+                let babyWarriors = [];
+
+                myArmy.forEach((unit) => {
+                    if (unit.attackTimer > 0) unit.attackTimer--;
+
+                    let enemiesInRange = enemyArmy.filter(e => e.x > unit.x && (e.x - unit.x) <= unit.range);
+                    let hitEnemyBase = (unit.x >= 740);
+
+                    if (enemiesInRange.length === 0 && !hitEnemyBase) {
+                        unit.x += unit.speed; 
+                    } else {
+                        if (unit.type === 'archer') {
+                            if (unit.attackTimer === 0 && enemiesInRange.length > 0) {
+                                archerArrows.push({ x: unit.x + 10, y: 160 - unit.height + 5, targetUnit: enemiesInRange[0], speed: 3.5, damage: unit.damage });
+                                unit.attackTimer = 75; 
+                            }
+                        } else {
+                            if (unit.attackTimer === 0 && enemiesInRange.length > 0) {
+                                enemiesInRange[0].hp -= unit.damage; unit.attackTimer = 65; 
+                            }
+                        }
+                    }
+
+                    if (hitEnemyBase && unit.attackTimer === 0) {
+                        enemyBaseHp -= unit.damage; unit.attackTimer = 65;
+                        if (enemyBaseHp <= 0) triggerGameOver('win');
+                    }
+
+                    if (unit.type === 'thayghien') {
+                        unit.abilityTimer++;
+                        if (unit.abilityTimer >= 360) {
+                            unit.abilityTimer = 0;
+                            babyWarriors.push({ id: Math.random(), x: unit.x + 6, hp: 100, maxHp: 100, speed: 0.5, damage: 15, color: "#3498db", size: 15, height: 35, type: 'warrior', range: 20, attackTimer: 0 });
+                        }
+                    }
+                });
+                if(babyWarriors.length > 0) myArmy = myArmy.concat(babyWarriors);
+
+                enemyArmy.forEach((enemy) => {
+                    if (enemy.attackTimer > 0) enemy.attackTimer--;
+
+                    let playersInRange = myArmy.filter(u => u.x < enemy.x && (enemy.x - u.x) <= enemy.range);
+                    let hitPlayerBase = (enemy.x <= 60);
+
+                    if (playersInRange.length === 0 && !hitPlayerBase) {
+                        enemy.x += enemy.speed; 
+                    } else {
+                        if (enemy.attackTimer === 0 && playersInRange.length > 0) {
+                            playersInRange[0].hp -= enemy.damage; enemy.attackTimer = 65; 
+                        }
+                    }
+
+                    if (hitPlayerBase && enemy.attackTimer === 0) {
+                        playerBaseHp -= enemy.damage; enemy.attackTimer = 65;
+                        if (playerBaseHp <= 0) triggerGameOver('lose');
+                    }
+                });
+
+                let deadCount = enemyArmy.filter(e => e.hp <= 0).length;
+                if (deadCount > 0) { gold += deadCount * 15; updateGoldDisplay(); }
+
+                myArmy = myArmy.filter(u => u.hp > 0);
+                enemyArmy = enemyArmy.filter(e => e.hp > 0);
+            }
+
+            // --- VẼ ĐỒ HỌA ---
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.save();
+            ctx.translate(-cameraX, 0); 
+
+            // Nền cỏ
+            ctx.fillStyle = "#1e272e"; ctx.fillRect(0, 160, worldWidth, 40);
+
+            // ---- VẼ LƯỚI TỌA ĐỘ NẾU ĐƯỢC BẬT ----
+            if (showGrid) {
+                ctx.strokeStyle = "rgba(255, 255, 255, 0.15)";
+                ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
+                ctx.font = "9px Arial";
+                ctx.lineWidth = 1;
+
+                // Vẽ các đường dọc (Trục X)
+                for (let i = 0; i <= worldWidth; i += 50) {
+                    ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, canvas.height); ctx.stroke();
+                    ctx.fillText(i, i + 2, 10);
+                }
+                
+                // Vẽ các đường ngang (Trục Y)
+                for (let j = 0; j <= canvas.height; j += 40) {
+                    ctx.beginPath(); ctx.moveTo(0, j); ctx.lineTo(worldWidth, j); ctx.stroke();
+                    // Để số Y luôn nhìn thấy khi lướt camera
+                    ctx.fillText(j, cameraX + 2, j - 2); 
+                }
+            }
+            // -------------------------------------
+
+            // Thành trì
+            ctx.fillStyle = "#7f8c8d"; ctx.fillRect(0, 50, 60, 110); 
+            ctx.fillStyle = "#95a5a6"; ctx.fillRect(740, 50, 60, 110); 
+
+            ctx.fillStyle = "#e67e22"; ctx.fillRect(38, 62, 24, 4); 
+            ctx.fillStyle = "#34495e"; ctx.fillRect(40, 66, 20, 15); 
+            ctx.fillStyle = "#2c3e50"; ctx.fillRect(740, 66, 20, 15); 
+
+            ctx.fillStyle = "red"; ctx.fillRect(10, 25, 100, 6);
+            ctx.fillStyle = "green"; ctx.fillRect(10, 25, (playerBaseHp / maxBaseHp) * 100, 6);
+            ctx.fillStyle = "red"; ctx.fillRect(690, 25, 100, 6);
+            ctx.fillStyle = "green"; ctx.fillRect(690, 25, (enemyBaseHp / maxBaseHp) * 100, 6);
+
+            myArmy.forEach((unit) => {
+                ctx.fillStyle = "red"; ctx.fillRect(unit.x - 2, 150 - unit.height, 20, 3);
+                ctx.fillStyle = "green"; ctx.fillRect(unit.x - 2, 150 - unit.height, (unit.hp / unit.maxHp) * 20, 3);
+                ctx.fillStyle = unit.color; ctx.fillRect(unit.x, 160 - unit.height, unit.size, unit.height);
+                if(unit.type === 'thayghien') { ctx.fillStyle = "rgba(155, 89, 182, 0.4)"; ctx.fillRect(unit.x - 3, 157, unit.size + 6, 3); }
+            });
+
+            enemyArmy.forEach((enemy) => {
+                ctx.fillStyle = "red"; ctx.fillRect(enemy.x - 2, 150 - enemy.height, 20, 3);
+                ctx.fillStyle = "green"; ctx.fillRect(enemy.x - 2, 150 - enemy.height, (enemy.hp / enemy.maxHp) * 20, 3);
+                ctx.fillStyle = enemy.color; ctx.fillRect(enemy.x, 160 - enemy.height, enemy.size, enemy.height);
+            });
+
+            ctx.fillStyle = "#f1c40f";
+            playerShells.concat(enemyShells).forEach(shell => {
+                ctx.beginPath(); ctx.arc(shell.x, shell.y, shell.isManual ? 5 : 4, 0, Math.PI*2); ctx.fill();
+            });
+
+            ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 1.5;
+            archerArrows.forEach(arrow => {
+                ctx.beginPath(); ctx.moveTo(arrow.x, arrow.y); ctx.lineTo(arrow.x + 6, arrow.y); ctx.stroke();
+            });
+
+            if (graphProjectile) {
+                ctx.fillStyle = "#ff4757"; ctx.beginPath(); ctx.arc(graphProjectile.currentX, graphProjectile.currentY, 6, 0, Math.PI*2); ctx.fill();
+                ctx.fillStyle = "#ffa502"; ctx.beginPath(); ctx.arc(graphProjectile.currentX - 5, graphProjectile.currentY, 4, 0, Math.PI*2); ctx.fill();
+            }
+
+            ctx.restore(); 
+            requestAnimationFrame(gameLoop);
+        }
+
+        updateGoldDisplay();
+        gameLoop();
+    </script>
+</body>
+</html>
